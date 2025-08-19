@@ -1,4 +1,5 @@
 entrypoint = "main.py"
+modules = ["python-3.11"]
 
 [deployment]
 run = "streamlit run main.py --server.address=0.0.0.0 --server.port=5000"
@@ -23,6 +24,3 @@ mode = "sequential"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "streamlit run main.py --server.address=0.0.0.0 --server.port=5000"
-
-[nix]
-channel = "stable-25_05"
