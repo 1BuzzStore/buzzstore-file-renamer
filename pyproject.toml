@@ -3,8 +3,4 @@
 name = "python-template"
 version = "0.1.0"
 description = ""
-authors = ["Your Name <you@example.com>"]
 requires-python = ">=3.11"
-dependencies = [
-    "streamlit>=1.48.1",
-]
