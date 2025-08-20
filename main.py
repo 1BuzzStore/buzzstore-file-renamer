@@ -95,7 +95,7 @@ st.markdown(
       <a href="https://store.buzznest.space" target="_blank" rel="noopener">
         {logo_html}
       </a>
-      <h1>📂 BuzzStore File Renamer</h1>
+      <h1>BuzzStore File Renamer</h1>
       <p>Easily rename and organize your files in bulk. Upload → Rename → Download. 🚀</p>
     </div>
     """,
