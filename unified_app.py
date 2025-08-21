@@ -67,14 +67,17 @@ if st.session_state.view == "free":
                 (len(f.getbuffer()) / (1024 * 1024)) > FREE_MAX_MB for f in uploaded_files
             ):
                 st.session_state.exceeded_limits = True
+                st.experimental_rerun()  # <-- removed in new version
             else:
                 rename_files(uploaded_files, prefix, FREE_MAX_MB)
 
     if st.session_state.exceeded_limits:
         st.warning("⚠️ You've exceeded Free plan limits!")
+        # Single-click button effect
         if st.button("Apply for Premium 💎"):
             st.session_state.view = "premium_login"
-            st.stop()  # stop and refresh layout
+            st.session_state.exceeded_limits = False  # reset
+            st.stop()  # immediately refresh layout
 
 # ---------------------------
 # PREMIUM LOGIN VIEW
