@@ -6,111 +6,83 @@ import uuid
 import hashlib
 import json
 
-USER_FILE = "users.json"
-
-FREE_MAX_FILES = 5
-FREE_MAX_MB = 50
-PREMIUM_MAX_MB = 200
-
 # ---------------------------
-# Load / Save Users
-# ---------------------------
-def load_users():
-    if not os.path.exists(USER_FILE):
-        return {}
-    with open(USER_FILE, "r") as f:
-        return json.load(f)
-
-def save_users(users):
-    with open(USER_FILE, "w") as f:
-        json.dump(users, f)
-
-users = load_users()
-
-# ---------------------------
-# Helpers
-# ---------------------------
-def hash_password(password):
-    return hashlib.sha256(password.encode()).hexdigest()
-
-def rename_files(files, prefix, max_size_mb):
-    oversized_files = [
-        f.name for f in files if (len(f.getbuffer()) / (1024 * 1024)) > max_size_mb
-    ]
-    if oversized_files:
-        st.error(f"❌ The following files exceed {max_size_mb}MB: {', '.join(oversized_files)}")
-        return False
-
-    zip_buffer = io.BytesIO()
-    with zipfile.ZipFile(zip_buffer, "w") as zip_file:
-        for i, uploaded_file in enumerate(files, start=1):
-            ext = os.path.splitext(uploaded_file.name)[1]
-            new_name = f"{prefix}_{i}{ext}"
-            zip_file.writestr(new_name, uploaded_file.getbuffer())
-    zip_buffer.seek(0)
-    st.success("✅ Files renamed successfully!")
-    st.download_button(
-        label="⬇️ Download Renamed Files (ZIP)",
-        data=zip_buffer,
-        file_name="renamed_files.zip",
-        mime="application/zip"
-    )
-    return True
-
-# ---------------------------
-# Session Defaults
+# SESSION STATE SETUP
 # ---------------------------
 if "view" not in st.session_state:
     st.session_state.view = "free"
 if "premium_logged_in" not in st.session_state:
     st.session_state.premium_logged_in = False
 if "email" not in st.session_state:
-    st.session_state.email = ""
+    st.session_state.email = None
 
 # ---------------------------
-# FREE VIEW
+# USERS DATA STORAGE
 # ---------------------------
-if st.session_state.view == "free":
+USERS_FILE = "users.json"
+
+if not os.path.exists(USERS_FILE):
+    with open(USERS_FILE, "w") as f:
+        json.dump({}, f)
+
+with open(USERS_FILE, "r") as f:
+    users = json.load(f)
+
+def save_users(users):
+    with open(USERS_FILE, "w") as f:
+        json.dump(users, f)
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+# ---------------------------
+# NAVIGATION
+# ---------------------------
+def show_free():
     st.title("🆓 Free File Renamer")
-    st.info(f"Upload up to {FREE_MAX_FILES} files, max {FREE_MAX_MB}MB each")
+    st.info("📦 Free Plan: Upload up to **5 files**, max **50MB each**")
+    max_files = 5
+    max_size_mb = 50
 
     uploaded_files = st.file_uploader(
-        f"Upload files (Max {FREE_MAX_FILES} files, {FREE_MAX_MB}MB each)",
-        accept_multiple_files=True
+        f"Upload files to rename (Max {max_files} files, {max_size_mb}MB each)",
+        accept_multiple_files=True,
+        key="free_files"
     )
-    prefix = st.text_input("Enter prefix for renamed files", value="buzzstore_free")
-
-    exceeded = False
-    if uploaded_files:
-        if len(uploaded_files) > FREE_MAX_FILES or any(
-            (len(f.getbuffer()) / (1024 * 1024)) > FREE_MAX_MB for f in uploaded_files
-        ):
-            exceeded = True
+    prefix = st.text_input("Enter prefix for renamed files", value="buzzstore", key="free_prefix")
 
     if st.button("Rename Files (Free)"):
         if uploaded_files:
-            if exceeded:
-                st.warning("⚠️ You've exceeded Free plan limits! Apply for Premium 💎")
+            if len(uploaded_files) > max_files:
+                st.warning("⚠️ You’ve exceeded free plan limits! Apply for Premium to continue.")
+                if st.button("➡️ Go to Premium"):
+                    st.session_state.view = "premium_login"
+                    st.experimental_rerun()
             else:
-                rename_files(uploaded_files, prefix, FREE_MAX_MB)
+                oversized = [f.name for f in uploaded_files if (len(f.getbuffer()) / (1024*1024)) > max_size_mb]
+                if oversized:
+                    st.warning(f"⚠️ The following files exceed {max_size_mb}MB: {', '.join(oversized)}")
+                else:
+                    zip_buffer = io.BytesIO()
+                    with zipfile.ZipFile(zip_buffer, "w") as zip_file:
+                        for i, f in enumerate(uploaded_files, start=1):
+                            ext = os.path.splitext(f.name)[1]
+                            new_name = f"{prefix}_{i}{ext}"
+                            zip_file.writestr(new_name, f.getbuffer())
+                    zip_buffer.seek(0)
+                    st.success("✅ Files renamed successfully!")
+                    st.download_button("⬇️ Download Renamed Files (ZIP)", zip_buffer, "renamed_files.zip", "application/zip")
         else:
             st.warning("⚠️ Please upload at least one file.")
-
-    if exceeded:
-        st.warning("⚠️ You've exceeded Free plan limits!")
-        if st.button("Apply for Premium 💎"):
-            st.session_state.view = "premium_login"
-            st.stop()
 
 # ---------------------------
 # PREMIUM LOGIN / REGISTER
 # ---------------------------
-elif st.session_state.view == "premium_login":
+def show_premium_login():
     st.title("💎 Premium Login / Register")
     tab = st.radio("Choose option", ["Login", "Register", "Forgot Password"])
-
-    email = st.text_input("Email")
-    password = st.text_input("Password", type="password")
+    email = st.text_input("Email", key="email")
+    password = st.text_input("Password", type="password", key="password")
 
     if tab == "Register":
         if st.button("Register"):
@@ -124,8 +96,9 @@ elif st.session_state.view == "premium_login":
                 save_users(users)
                 st.success(f"Registered! Your access token: {token}")
                 st.session_state.email = email
-                st.session_state.view = "premium_token"
-                st.stop()
+                if st.button("➡️ Go to Premium Access Token"):
+                    st.session_state.view = "premium_token"
+                    st.experimental_rerun()
 
     elif tab == "Login":
         if st.button("Login"):
@@ -135,78 +108,92 @@ elif st.session_state.view == "premium_login":
             elif user["password"] != hash_password(password):
                 st.error("Incorrect password!")
             else:
-                st.success("✅ Login successful! Enter your token to continue.")
+                st.success("✅ Login successful!")
                 st.session_state.email = email
-                st.session_state.view = "premium_token"
-                st.stop()
+                if st.button("➡️ Enter Premium Token"):
+                    st.session_state.view = "premium_token"
+                    st.experimental_rerun()
 
-    else:  # Forgot Password
-        if st.button("Send Reset"):
+    elif tab == "Forgot Password":
+        if st.button("Reset Password"):
             user = users.get(email)
             if not user:
                 st.error("Email not found!")
             else:
-                st.info(f"Reset password token sent! (simulated)")
-                st.warning("For testing, just set a new password below.")
-
-        new_password = st.text_input("Set New Password", type="password")
-        if st.button("Reset Password"):
-            if email in users and new_password:
+                new_password = str(uuid.uuid4())[:8]
                 users[email]["password"] = hash_password(new_password)
                 save_users(users)
-                st.success("✅ Password reset successfully!")
-            else:
-                st.error("Email not found or new password empty!")
+                st.success(f"✅ Password reset! New password: {new_password}")
 
     if st.button("⬅️ Back to Free"):
         st.session_state.view = "free"
-        st.stop()
+        st.experimental_rerun()
 
 # ---------------------------
 # PREMIUM TOKEN ENTRY
 # ---------------------------
-elif st.session_state.view == "premium_token":
+def show_premium_token():
     st.title("🔑 Enter Premium Access Token")
-    token_input = st.text_input("Access Token")
+    token_input = st.text_input("Access Token", key="token_input")
     if st.button("Verify Token"):
         user = users.get(st.session_state.email)
         if user and token_input == user["token"]:
             st.session_state.premium_logged_in = True
             st.session_state.view = "premium"
             st.success("✅ Token verified! Premium access granted.")
-            st.stop()
+            st.experimental_rerun()
         else:
             st.error("❌ Invalid token!")
 
     if st.button("⬅️ Back to Free"):
         st.session_state.view = "free"
-        st.stop()
+        st.experimental_rerun()
 
 # ---------------------------
 # PREMIUM FILE RENAMER
 # ---------------------------
-elif st.session_state.view == "premium":
-    if not st.session_state.premium_logged_in:
-        st.warning("You must login and verify token to access Premium features.")
-        if st.button("Go to Login"):
-            st.session_state.view = "premium_login"
-            st.stop()
-    else:
-        st.title("💎 Premium File Renamer")
-        st.success(f"Upload unlimited files, max {PREMIUM_MAX_MB}MB each")
+def show_premium():
+    st.title("💎 Premium File Renamer")
+    st.success("💎 Premium Plan: Unlimited files, max **200MB each**")
+    max_size_mb = 200
 
-        uploaded_files = st.file_uploader(
-            f"Upload files (Max {PREMIUM_MAX_MB}MB each)",
-            accept_multiple_files=True
-        )
-        prefix = st.text_input("Enter prefix for renamed files", value="buzzstore_premium")
+    uploaded_files = st.file_uploader(
+        f"Upload files to rename (Max {max_size_mb}MB each)",
+        accept_multiple_files=True,
+        key="premium_files"
+    )
+    prefix = st.text_input("Enter prefix for renamed files", value="buzzstore", key="premium_prefix")
 
-        if st.button("Rename Files (Premium)"):
-            if uploaded_files:
-                rename_files(uploaded_files, prefix, PREMIUM_MAX_MB)
+    if st.button("Rename Files (Premium)"):
+        if uploaded_files:
+            oversized = [f.name for f in uploaded_files if (len(f.getbuffer()) / (1024*1024)) > max_size_mb]
+            if oversized:
+                st.error(f"❌ The following files exceed {max_size_mb}MB: {', '.join(oversized)}")
             else:
-                st.warning("⚠️ Please upload at least one file.")
+                zip_buffer = io.BytesIO()
+                with zipfile.ZipFile(zip_buffer, "w") as zip_file:
+                    for i, f in enumerate(uploaded_files, start=1):
+                        ext = os.path.splitext(f.name)[1]
+                        new_name = f"{prefix}_{i}{ext}"
+                        zip_file.writestr(new_name, f.getbuffer())
+                zip_buffer.seek(0)
+                st.success("✅ Files renamed successfully!")
+                st.download_button("⬇️ Download Renamed Files (ZIP)", zip_buffer, "renamed_files.zip", "application/zip")
+        else:
+            st.warning("⚠️ Please upload at least one file.")
 
-        if st.button("⬅️ Back to Free"):
-            st.session_state.view = "free"
-            st.stop()
+    if st.button("⬅️ Back to Free"):
+        st.session_state.view = "free"
+        st.experimental_rerun()
+
+# ---------------------------
+# MAIN NAVIGATION
+# ---------------------------
+if st.session_state.view == "free":
+    show_free()
+elif st.session_state.view == "premium_login":
+    show_premium_login()
+elif st.session_state.view == "premium_token":
+    show_premium_token()
+elif st.session_state.view == "premium":
+    show_premium()
