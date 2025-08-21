@@ -16,9 +16,11 @@ PREMIUM_MAX_MB = 200
 # SESSION STATE
 # ---------------------------
 if "plan" not in st.session_state:
-    st.session_state.plan = "free"  # default to free
+    st.session_state.plan = "free"  # default plan
 if "view" not in st.session_state:
-    st.session_state.view = "free"  # what is currently shown
+    st.session_state.view = "free"  # current view
+if "exceeded_limits" not in st.session_state:
+    st.session_state.exceeded_limits = False  # free user limit flag
 
 # ---------------------------
 # FUNCTIONS
@@ -32,7 +34,7 @@ def rename_files(uploaded_files, prefix, max_mb):
         st.error(
             f"❌ The following files exceed the {max_mb}MB limit: {', '.join(oversized_files)}"
         )
-        return
+        return False
 
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w") as zip_file:
@@ -48,22 +50,25 @@ def rename_files(uploaded_files, prefix, max_mb):
         file_name="renamed_files.zip",
         mime="application/zip"
     )
+    return True
 
 # ---------------------------
 # LAUNCHER
 # ---------------------------
 st.title("📝 Buzzstore File Renamer Launcher")
 
-# Plan switcher
+# Plan switcher buttons
 col1, col2 = st.columns(2)
 with col1:
     if st.button("Use Free Plan"):
         st.session_state.plan = "free"
         st.session_state.view = "free"
+        st.session_state.exceeded_limits = False
 with col2:
     if st.button("Use Premium Plan"):
         st.session_state.plan = "premium"
         st.session_state.view = "premium"
+        st.session_state.exceeded_limits = False
 
 # ---------------------------
 # FREE PLAN VIEW
@@ -80,12 +85,24 @@ if st.session_state.view == "free":
 
     if st.button("Rename Files (Free)"):
         if uploaded_files:
-            if len(uploaded_files) > FREE_MAX_FILES:
-                st.error(f"❌ Free users can upload up to {FREE_MAX_FILES} files only.")
+            # Check if user exceeded free limits
+            if len(uploaded_files) > FREE_MAX_FILES or any(
+                (len(f.getbuffer()) / (1024 * 1024)) > FREE_MAX_MB for f in uploaded_files
+            ):
+                st.session_state.exceeded_limits = True
             else:
                 rename_files(uploaded_files, prefix, FREE_MAX_MB)
         else:
             st.warning("⚠️ Please upload at least one file.")
+
+    # Show upgrade prompt if limits exceeded
+    if st.session_state.exceeded_limits:
+        st.warning("⚠️ You've exceeded Free plan limits!")
+        if st.button("Upgrade to Premium"):
+            st.session_state.plan = "premium"
+            st.session_state.view = "premium"
+            st.session_state.exceeded_limits = False
+            st.experimental_rerun()
 
 # ---------------------------
 # PREMIUM PLAN VIEW
