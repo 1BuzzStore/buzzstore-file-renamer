@@ -9,13 +9,13 @@ import zipfile
 FREE_MAX_FILES = 5
 FREE_MAX_MB = 50
 PREMIUM_MAX_MB = 200
-PREMIUM_PASSWORD = "buzzpremium"  # change this to your desired premium key
+PREMIUM_PASSWORD = "buzzpremium"  # change to your desired premium key
 
 # ---------------------------
 # SESSION STATE
 # ---------------------------
 if "view" not in st.session_state:
-    st.session_state.view = "free"  # current page/view
+    st.session_state.view = "free"
 if "premium_authenticated" not in st.session_state:
     st.session_state.premium_authenticated = False
 if "exceeded_limits" not in st.session_state:
@@ -67,12 +67,14 @@ if st.session_state.view == "free":
                 (len(f.getbuffer()) / (1024 * 1024)) > FREE_MAX_MB for f in uploaded_files
             ):
                 st.session_state.exceeded_limits = True
-                st.warning("⚠️ You've exceeded Free plan limits! Apply for Premium to continue.")
-                st.session_state.view = "premium_login"
             else:
                 rename_files(uploaded_files, prefix, FREE_MAX_MB)
-        else:
-            st.warning("⚠️ Please upload at least one file.")
+
+    if st.session_state.exceeded_limits:
+        st.warning("⚠️ You've exceeded Free plan limits!")
+        if st.button("Apply for Premium 💎"):
+            st.session_state.view = "premium_login"
+            st.stop()  # stop and refresh layout
 
 # ---------------------------
 # PREMIUM LOGIN VIEW
@@ -81,18 +83,18 @@ elif st.session_state.view == "premium_login":
     st.title("💎 Premium Access Required")
     st.info(f"Unlimited files, max {PREMIUM_MAX_MB}MB each")
 
-    premium_key = st.text_input("Enter Premium Key to access Premium features", type="password")
+    premium_key = st.text_input("Enter Premium Key", type="password")
     if st.button("Authenticate Premium"):
         if premium_key == PREMIUM_PASSWORD:
             st.session_state.premium_authenticated = True
             st.session_state.view = "premium"
-            st.experimental_rerun()
         else:
             st.error("❌ Invalid Premium Key")
 
     if st.button("← Back to Free"):
         st.session_state.view = "free"
-        st.experimental_rerun()
+        st.session_state.exceeded_limits = False
+        st.stop()
 
 # ---------------------------
 # PREMIUM VIEW
@@ -116,4 +118,5 @@ elif st.session_state.view == "premium" and st.session_state.premium_authenticat
 
     if st.button("← Back to Free"):
         st.session_state.view = "free"
-        st.experimental_rerun()
+        st.session_state.exceeded_limits = False
+        st.stop()
