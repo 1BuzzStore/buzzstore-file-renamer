@@ -4,26 +4,31 @@ import io
 import zipfile
 import uuid
 import hashlib
+import json
 
-# ---------------------------
-# Constants
-# ---------------------------
+USER_FILE = "users.json"
+
 FREE_MAX_FILES = 5
 FREE_MAX_MB = 50
 PREMIUM_MAX_MB = 200
 
 # ---------------------------
-# Session State Defaults
+# Load / Save Users
 # ---------------------------
-if "view" not in st.session_state:
-    st.session_state.view = "free"  # free, premium_login, premium
-if "premium_logged_in" not in st.session_state:
-    st.session_state.premium_logged_in = False
-if "users" not in st.session_state:
-    st.session_state.users = {}  # email -> hashed password & token
+def load_users():
+    if not os.path.exists(USER_FILE):
+        return {}
+    with open(USER_FILE, "r") as f:
+        return json.load(f)
+
+def save_users(users):
+    with open(USER_FILE, "w") as f:
+        json.dump(users, f)
+
+users = load_users()
 
 # ---------------------------
-# Helper Functions
+# Helpers
 # ---------------------------
 def hash_password(password):
     return hashlib.sha256(password.encode()).hexdigest()
@@ -53,6 +58,16 @@ def rename_files(files, prefix, max_size_mb):
     return True
 
 # ---------------------------
+# Session Defaults
+# ---------------------------
+if "view" not in st.session_state:
+    st.session_state.view = "free"
+if "premium_logged_in" not in st.session_state:
+    st.session_state.premium_logged_in = False
+if "email" not in st.session_state:
+    st.session_state.email = ""
+
+# ---------------------------
 # FREE VIEW
 # ---------------------------
 if st.session_state.view == "free":
@@ -75,7 +90,7 @@ if st.session_state.view == "free":
     if st.button("Rename Files (Free)"):
         if uploaded_files:
             if exceeded:
-                st.warning("⚠️ You've exceeded Free plan limits!")
+                st.warning("⚠️ You've exceeded Free plan limits! Apply for Premium 💎")
             else:
                 rename_files(uploaded_files, prefix, FREE_MAX_MB)
         else:
@@ -88,53 +103,91 @@ if st.session_state.view == "free":
             st.stop()
 
 # ---------------------------
-# PREMIUM LOGIN / REGISTER VIEW
+# PREMIUM LOGIN / REGISTER
 # ---------------------------
 elif st.session_state.view == "premium_login":
     st.title("💎 Premium Login / Register")
-
-    tab = st.radio("Choose option", ["Login", "Register"])
+    tab = st.radio("Choose option", ["Login", "Register", "Forgot Password"])
 
     email = st.text_input("Email")
     password = st.text_input("Password", type="password")
 
     if tab == "Register":
         if st.button("Register"):
-            if email in st.session_state.users:
-                st.error("Email already registered!")
-            elif not email or not password:
+            if not email or not password:
                 st.error("Email and password required!")
+            elif email in users:
+                st.error("Email already registered!")
             else:
                 token = str(uuid.uuid4())
-                st.session_state.users[email] = {"password": hash_password(password), "token": token}
+                users[email] = {"password": hash_password(password), "token": token}
+                save_users(users)
                 st.success(f"Registered! Your access token: {token}")
-                st.session_state.premium_logged_in = True
-                st.session_state.view = "premium"
+                st.session_state.email = email
+                st.session_state.view = "premium_token"
                 st.stop()
 
-    else:  # Login
+    elif tab == "Login":
         if st.button("Login"):
-            user = st.session_state.users.get(email)
+            user = users.get(email)
             if not user:
                 st.error("Email not found!")
             elif user["password"] != hash_password(password):
                 st.error("Incorrect password!")
             else:
-                st.success("✅ Logged in successfully!")
-                st.session_state.premium_logged_in = True
-                st.session_state.view = "premium"
+                st.success("✅ Login successful! Enter your token to continue.")
+                st.session_state.email = email
+                st.session_state.view = "premium_token"
                 st.stop()
+
+    else:  # Forgot Password
+        if st.button("Send Reset"):
+            user = users.get(email)
+            if not user:
+                st.error("Email not found!")
+            else:
+                st.info(f"Reset password token sent! (simulated)")
+                st.warning("For testing, just set a new password below.")
+
+        new_password = st.text_input("Set New Password", type="password")
+        if st.button("Reset Password"):
+            if email in users and new_password:
+                users[email]["password"] = hash_password(new_password)
+                save_users(users)
+                st.success("✅ Password reset successfully!")
+            else:
+                st.error("Email not found or new password empty!")
 
     if st.button("⬅️ Back to Free"):
         st.session_state.view = "free"
         st.stop()
 
 # ---------------------------
-# PREMIUM FILE RENAMER VIEW
+# PREMIUM TOKEN ENTRY
+# ---------------------------
+elif st.session_state.view == "premium_token":
+    st.title("🔑 Enter Premium Access Token")
+    token_input = st.text_input("Access Token")
+    if st.button("Verify Token"):
+        user = users.get(st.session_state.email)
+        if user and token_input == user["token"]:
+            st.session_state.premium_logged_in = True
+            st.session_state.view = "premium"
+            st.success("✅ Token verified! Premium access granted.")
+            st.stop()
+        else:
+            st.error("❌ Invalid token!")
+
+    if st.button("⬅️ Back to Free"):
+        st.session_state.view = "free"
+        st.stop()
+
+# ---------------------------
+# PREMIUM FILE RENAMER
 # ---------------------------
 elif st.session_state.view == "premium":
     if not st.session_state.premium_logged_in:
-        st.warning("You must login/register to access Premium features.")
+        st.warning("You must login and verify token to access Premium features.")
         if st.button("Go to Login"):
             st.session_state.view = "premium_login"
             st.stop()
