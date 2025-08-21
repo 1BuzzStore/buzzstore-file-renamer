@@ -3,12 +3,9 @@ import os
 import io
 import zipfile
 
-# ---------------------------
-# File Renamer (Free Feature)
-# ---------------------------
-st.title("🆓 Free File Renamer")
+st.set_page_config(page_title="Buzzstore Free File Renamer")
 
-# Show plan limits clearly
+st.title("🆓 Free File Renamer")
 st.info("📦 Free Plan: Upload up to **5 files**, max **50MB each**")
 
 max_files = 5
@@ -18,6 +15,7 @@ uploaded_files = st.file_uploader(
     f"Upload files to rename (Max {max_files} files, {max_size_mb}MB each)",
     accept_multiple_files=True
 )
+
 prefix = st.text_input("Enter prefix for renamed files", value="buzzstore")
 
 if st.button("Rename Files"):
@@ -35,14 +33,13 @@ if st.button("Rename Files"):
                     f"❌ The following files exceed the {max_size_mb}MB limit: {', '.join(oversized_files)}"
                 )
             else:
-                # Create an in-memory zip file
+                # Create in-memory ZIP
                 zip_buffer = io.BytesIO()
                 with zipfile.ZipFile(zip_buffer, "w") as zip_file:
                     for i, uploaded_file in enumerate(uploaded_files, start=1):
-                        file_extension = os.path.splitext(uploaded_file.name)[1]
-                        new_name = f"{prefix}_{i}{file_extension}"
+                        ext = os.path.splitext(uploaded_file.name)[1]
+                        new_name = f"{prefix}_{i}{ext}"
                         zip_file.writestr(new_name, uploaded_file.getbuffer())
-
                 zip_buffer.seek(0)
                 st.success("✅ Files renamed successfully!")
                 st.download_button(
