@@ -1,70 +1,55 @@
 import streamlit as st
-import os, zipfile, io
-
-# Free plan: 50MB
-st.set_option("server.maxUploadSize", 50)
-
-# ---------------------------
-# Dummy User Database
-# ---------------------------
-USERS = {
-    "free_user": {"password": "123", "plan": "free"},
-}
-
-st.set_page_config(page_title="Buzzstore Free Tool", page_icon="⚡", layout="centered")
-st.title("⚡ Buzzstore Tools - Free Edition")
+import os
+import io
+import zipfile
 
 # ---------------------------
-# Login
+# File Renamer (Free Feature)
 # ---------------------------
-if "user" not in st.session_state:
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+st.title("🆓 Free File Renamer")
 
-    if st.button("Login"):
-        if username in USERS and USERS[username]["password"] == password:
-            st.session_state["user"] = USERS[username]
-            st.rerun()
+# Show plan limits clearly
+st.info("📦 Free Plan: Upload up to **5 files**, max **50MB each**")
+
+max_files = 5
+max_size_mb = 50
+
+uploaded_files = st.file_uploader(
+    f"Upload files to rename (Max {max_files} files, {max_size_mb}MB each)",
+    accept_multiple_files=True
+)
+prefix = st.text_input("Enter prefix for renamed files", value="buzzstore")
+
+if st.button("Rename Files"):
+    if uploaded_files:
+        # Check number of files
+        if len(uploaded_files) > max_files:
+            st.error(f"❌ Free users can only upload up to {max_files} files.")
         else:
-            st.error("❌ Invalid login")
-else:
-    plan = st.session_state["user"]["plan"]
-
-    st.sidebar.title("User Panel")
-    st.sidebar.write("👤 Free Plan")
-    if st.sidebar.button("Logout"):
-        del st.session_state["user"]
-        st.rerun()
-
-    # ---------------------------
-    # File Renamer
-    # ---------------------------
-    st.subheader("🆓 File Renamer (Free Plan)")
-    st.info("📦 Free Plan: Upload up to **5 files**, max **50MB each**")
-
-    uploaded_files = st.file_uploader(
-        "Upload files (max 50MB each)",
-        accept_multiple_files=True
-    )
-    prefix = st.text_input("Prefix", "buzzstore")
-
-    if st.button("Rename Files"):
-        if uploaded_files:
-            if len(uploaded_files) > 5:
-                st.error("❌ Free users can only upload up to 5 files.")
+            # Validate file sizes
+            oversized_files = [
+                f.name for f in uploaded_files if (len(f.getbuffer()) / (1024 * 1024)) > max_size_mb
+            ]
+            if oversized_files:
+                st.error(
+                    f"❌ The following files exceed the {max_size_mb}MB limit: {', '.join(oversized_files)}"
+                )
             else:
-                oversized_files = [
-                    f.name for f in uploaded_files if (len(f.getbuffer()) / (1024 * 1024)) > 50
-                ]
-                if oversized_files:
-                    st.error(f"❌ Files exceed 50MB: {', '.join(oversized_files)}")
-                else:
-                    zip_buffer = io.BytesIO()
-                    with zipfile.ZipFile(zip_buffer, "w") as zip_file:
-                        for i, f in enumerate(uploaded_files, 1):
-                            ext = os.path.splitext(f.name)[1]
-                            zip_file.writestr(f"{prefix}_{i}{ext}", f.getbuffer())
-                    zip_buffer.seek(0)
-                    st.download_button("⬇️ Download", zip_buffer, "renamed_files.zip", "application/zip")
-        else:
-            st.warning("⚠️ Upload at least one file.")
+                # Create an in-memory zip file
+                zip_buffer = io.BytesIO()
+                with zipfile.ZipFile(zip_buffer, "w") as zip_file:
+                    for i, uploaded_file in enumerate(uploaded_files, start=1):
+                        file_extension = os.path.splitext(uploaded_file.name)[1]
+                        new_name = f"{prefix}_{i}{file_extension}"
+                        zip_file.writestr(new_name, uploaded_file.getbuffer())
+
+                zip_buffer.seek(0)
+                st.success("✅ Files renamed successfully!")
+                st.download_button(
+                    label="⬇️ Download Renamed Files (ZIP)",
+                    data=zip_buffer,
+                    file_name="renamed_files.zip",
+                    mime="application/zip"
+                )
+    else:
+        st.warning("⚠️ Please upload at least one file.")
