@@ -15,8 +15,6 @@ PREMIUM_MAX_MB = 200
 # ---------------------------
 if "view" not in st.session_state:
     st.session_state.view = "free"  # free or premium
-if "exceeded_limits" not in st.session_state:
-    st.session_state.exceeded_limits = False
 
 # ---------------------------
 # Helper Function
@@ -27,7 +25,7 @@ def rename_files(files, prefix, max_size_mb):
     ]
     if oversized_files:
         st.error(f"❌ The following files exceed {max_size_mb}MB: {', '.join(oversized_files)}")
-        return
+        return False
 
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w") as zip_file:
@@ -43,6 +41,7 @@ def rename_files(files, prefix, max_size_mb):
         file_name="renamed_files.zip",
         mime="application/zip"
     )
+    return True
 
 # ---------------------------
 # FREE VIEW
@@ -57,25 +56,27 @@ if st.session_state.view == "free":
     )
     prefix = st.text_input("Enter prefix for renamed files", value="buzzstore_free")
 
+    exceeded = False
+    if uploaded_files:
+        if len(uploaded_files) > FREE_MAX_FILES or any(
+            (len(f.getbuffer()) / (1024 * 1024)) > FREE_MAX_MB for f in uploaded_files
+        ):
+            exceeded = True
+
     if st.button("Rename Files (Free)"):
         if uploaded_files:
-            if len(uploaded_files) > FREE_MAX_FILES or any(
-                (len(f.getbuffer()) / (1024 * 1024)) > FREE_MAX_MB for f in uploaded_files
-            ):
-                st.session_state.exceeded_limits = True
-                st.stop()  # immediately re-render
+            if exceeded:
+                st.warning("⚠️ You've exceeded Free plan limits!")
             else:
                 rename_files(uploaded_files, prefix, FREE_MAX_MB)
         else:
             st.warning("⚠️ Please upload at least one file.")
 
-    # Show Premium button only if limits exceeded
-    if st.session_state.exceeded_limits:
+    if exceeded:
         st.warning("⚠️ You've exceeded Free plan limits!")
         if st.button("Apply for Premium 💎"):
             st.session_state.view = "premium"
-            st.session_state.exceeded_limits = False
-            st.stop()  # immediately switch view
+            st.stop()  # switch view immediately
 
 # ---------------------------
 # PREMIUM VIEW
@@ -96,7 +97,6 @@ elif st.session_state.view == "premium":
         else:
             st.warning("⚠️ Please upload at least one file.")
 
-    # Back to Free button
     if st.button("⬅️ Back to Free"):
         st.session_state.view = "free"
         st.stop()  # immediately switch back
