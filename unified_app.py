@@ -9,8 +9,7 @@ import zipfile
 FREE_MAX_FILES = 5
 FREE_MAX_MB = 50
 
-PREMIUM_MAX_FILES = None  # Unlimited
-PREMIUM_MAX_MB = 200
+PREMIUM_MAX_MB = 200  # Unlimited files, bigger size
 
 # ---------------------------
 # SESSION STATE
@@ -53,72 +52,51 @@ def rename_files(uploaded_files, prefix, max_mb):
     return True
 
 # ---------------------------
-# LAUNCHER
-# ---------------------------
-st.title("📝 Buzzstore File Renamer Launcher")
-
-# Plan switcher buttons
-col1, col2 = st.columns(2)
-with col1:
-    if st.button("Use Free Plan"):
-        st.session_state.plan = "free"
-        st.session_state.view = "free"
-        st.session_state.exceeded_limits = False
-with col2:
-    if st.button("Use Premium Plan"):
-        st.session_state.plan = "premium"
-        st.session_state.view = "premium"
-        st.session_state.exceeded_limits = False
-
-# ---------------------------
 # FREE PLAN VIEW
 # ---------------------------
-if st.session_state.view == "free":
-    st.subheader("🆓 Free File Renamer")
-    st.info(f"Upload up to {FREE_MAX_FILES} files, max {FREE_MAX_MB}MB each")
+st.title("📝 Buzzstore File Renamer")
+st.subheader("🆓 Free File Renamer")
+st.info(f"Upload up to {FREE_MAX_FILES} files, max {FREE_MAX_MB}MB each")
 
-    uploaded_files = st.file_uploader(
-        f"Upload files (Max {FREE_MAX_FILES} files, {FREE_MAX_MB}MB each)",
-        accept_multiple_files=True
-    )
-    prefix = st.text_input("Enter prefix for renamed files", value="buzzstore_free")
+uploaded_files = st.file_uploader(
+    f"Upload files (Max {FREE_MAX_FILES} files, {FREE_MAX_MB}MB each)",
+    accept_multiple_files=True
+)
+prefix = st.text_input("Enter prefix for renamed files", value="buzzstore_free")
 
-    if st.button("Rename Files (Free)"):
-        if uploaded_files:
-            # Check if user exceeded free limits
-            if len(uploaded_files) > FREE_MAX_FILES or any(
-                (len(f.getbuffer()) / (1024 * 1024)) > FREE_MAX_MB for f in uploaded_files
-            ):
-                st.session_state.exceeded_limits = True
-            else:
-                rename_files(uploaded_files, prefix, FREE_MAX_MB)
+if st.button("Rename Files (Free)"):
+    if uploaded_files:
+        # Check if user exceeded free limits
+        if len(uploaded_files) > FREE_MAX_FILES or any(
+            (len(f.getbuffer()) / (1024 * 1024)) > FREE_MAX_MB for f in uploaded_files
+        ):
+            st.session_state.exceeded_limits = True
         else:
-            st.warning("⚠️ Please upload at least one file.")
-
-    # Show upgrade prompt if limits exceeded
-    if st.session_state.exceeded_limits:
-        st.warning("⚠️ You've exceeded Free plan limits!")
-        if st.button("Upgrade to Premium"):
-            st.session_state.plan = "premium"
-            st.session_state.view = "premium"
-            st.session_state.exceeded_limits = False
-            st.experimental_rerun()
+            rename_files(uploaded_files, prefix, FREE_MAX_MB)
+    else:
+        st.warning("⚠️ Please upload at least one file.")
 
 # ---------------------------
-# PREMIUM PLAN VIEW
+# SHOW PREMIUM UPGRADE PROMPT IF EXCEEDED
 # ---------------------------
-if st.session_state.view == "premium":
-    st.subheader("💎 Premium File Renamer")
-    st.success(f"Unlimited files, max {PREMIUM_MAX_MB}MB each")
+if st.session_state.exceeded_limits:
+    st.warning("⚠️ You've exceeded Free plan limits!")
+    st.subheader("💎 Upgrade to Premium")
+    st.info(f"Unlimited files, max {PREMIUM_MAX_MB}MB each")
 
-    uploaded_files = st.file_uploader(
+    premium_uploaded_files = st.file_uploader(
         f"Upload files (Max {PREMIUM_MAX_MB}MB each)",
-        accept_multiple_files=True
+        accept_multiple_files=True,
+        key="premium_uploader"
     )
-    prefix = st.text_input("Enter prefix for renamed files", value="buzzstore_premium")
+    premium_prefix = st.text_input(
+        "Enter prefix for renamed files (Premium)",
+        value="buzzstore_premium",
+        key="premium_prefix"
+    )
 
     if st.button("Rename Files (Premium)"):
-        if uploaded_files:
-            rename_files(uploaded_files, prefix, PREMIUM_MAX_MB)
+        if premium_uploaded_files:
+            rename_files(premium_uploaded_files, premium_prefix, PREMIUM_MAX_MB)
         else:
             st.warning("⚠️ Please upload at least one file.")
