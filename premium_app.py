@@ -1,67 +1,51 @@
 import streamlit as st
-import os, zipfile, io
-
-# Premium plan: 200MB
-st.set_option("server.maxUploadSize", 200)
-
-# ---------------------------
-# Dummy User Database
-# ---------------------------
-USERS = {
-    "premium_user": {"password": "456", "plan": "premium"},
-}
-
-st.set_page_config(page_title="Buzzstore Premium Tool", page_icon="💎", layout="centered")
-st.title("💎 Buzzstore Tools - Premium Edition")
+import os
+import io
+import zipfile
 
 # ---------------------------
-# Login
+# File Renamer (Premium Feature)
 # ---------------------------
-if "user" not in st.session_state:
-    username = st.text_input("Username")
-    password = st.text_input("Password", type="password")
+st.title("💎 Premium File Renamer")
 
-    if st.button("Login"):
-        if username in USERS and USERS[username]["password"] == password:
-            st.session_state["user"] = USERS[username]
-            st.rerun()
+# Show plan limits clearly
+st.success("💎 Premium Plan: Unlimited files, max **200MB each**")
+
+max_files = None
+max_size_mb = 200
+
+uploaded_files = st.file_uploader(
+    f"Upload files to rename (Max {max_size_mb}MB each)",
+    accept_multiple_files=True
+)
+prefix = st.text_input("Enter prefix for renamed files", value="buzzstore")
+
+if st.button("Rename Files"):
+    if uploaded_files:
+        # Validate file sizes
+        oversized_files = [
+            f.name for f in uploaded_files if (len(f.getbuffer()) / (1024 * 1024)) > max_size_mb
+        ]
+        if oversized_files:
+            st.error(
+                f"❌ The following files exceed the {max_size_mb}MB limit: {', '.join(oversized_files)}"
+            )
         else:
-            st.error("❌ Invalid login")
-else:
-    plan = st.session_state["user"]["plan"]
+            # Create an in-memory zip file
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w") as zip_file:
+                for i, uploaded_file in enumerate(uploaded_files, start=1):
+                    file_extension = os.path.splitext(uploaded_file.name)[1]
+                    new_name = f"{prefix}_{i}{file_extension}"
+                    zip_file.writestr(new_name, uploaded_file.getbuffer())
 
-    st.sidebar.title("User Panel")
-    st.sidebar.write("👤 Premium Plan")
-    if st.sidebar.button("Logout"):
-        del st.session_state["user"]
-        st.rerun()
-
-    # ---------------------------
-    # File Renamer
-    # ---------------------------
-    st.subheader("⚡ File Renamer (Premium Plan)")
-    st.success("💎 Premium Plan: Unlimited files, max **200MB each**")
-
-    uploaded_files = st.file_uploader(
-        "Upload files (max 200MB each)",
-        accept_multiple_files=True
-    )
-    prefix = st.text_input("Prefix", "buzzstore")
-
-    if st.button("Rename Files"):
-        if uploaded_files:
-            oversized_files = [
-                f.name for f in uploaded_files if (len(f.getbuffer()) / (1024 * 1024)) > 200
-            ]
-            if oversized_files:
-                st.error(f"❌ Files exceed 200MB: {', '.join(oversized_files)}")
-            else:
-                zip_buffer = io.BytesIO()
-                with zipfile.ZipFile(zip_buffer, "w") as zip_file:
-                    for i, f in enumerate(uploaded_files, 1):
-                        ext = os.path.splitext(f.name)[1]
-                        zip_file.writestr(f"{prefix}_{i}{ext}", f.getbuffer())
-                zip_buffer.seek(0)
-                st.download_button("⬇️ Download", zip_buffer, "renamed_files.zip", "application/zip")
-        else:
-            st.warning("⚠️ Upload at least one file.")
+            zip_buffer.seek(0)
+            st.success("✅ Files renamed successfully!")
+            st.download_button(
+                label="⬇️ Download Renamed Files (ZIP)",
+                data=zip_buffer,
+                file_name="renamed_files.zip",
+                mime="application/zip"
+            )
+    else:
+        st.warning("⚠️ Please upload at least one file.")
