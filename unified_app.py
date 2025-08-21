@@ -9,23 +9,25 @@ import zipfile
 FREE_MAX_FILES = 5
 FREE_MAX_MB = 50
 
-PREMIUM_MAX_MB = 200  # Unlimited files, bigger size
+PREMIUM_MAX_MB = 200
+PREMIUM_PASSWORD = "buzzpremium"  # change this to your desired premium key
 
 # ---------------------------
 # SESSION STATE
 # ---------------------------
 if "plan" not in st.session_state:
-    st.session_state.plan = "free"  # default plan
+    st.session_state.plan = "free"
 if "view" not in st.session_state:
-    st.session_state.view = "free"  # current view
+    st.session_state.view = "free"
 if "exceeded_limits" not in st.session_state:
-    st.session_state.exceeded_limits = False  # free user limit flag
+    st.session_state.exceeded_limits = False
+if "premium_authenticated" not in st.session_state:
+    st.session_state.premium_authenticated = False
 
 # ---------------------------
 # FUNCTIONS
 # ---------------------------
 def rename_files(uploaded_files, prefix, max_mb):
-    """Renames files and returns in-memory zip"""
     oversized_files = [
         f.name for f in uploaded_files if (len(f.getbuffer()) / (1024 * 1024)) > max_mb
     ]
@@ -71,19 +73,32 @@ if st.button("Rename Files (Free)"):
             (len(f.getbuffer()) / (1024 * 1024)) > FREE_MAX_MB for f in uploaded_files
         ):
             st.session_state.exceeded_limits = True
+            st.warning("⚠️ You've exceeded Free plan limits!")
         else:
             rename_files(uploaded_files, prefix, FREE_MAX_MB)
     else:
         st.warning("⚠️ Please upload at least one file.")
 
 # ---------------------------
-# SHOW PREMIUM UPGRADE PROMPT IF EXCEEDED
+# PREMIUM AUTHENTICATION
 # ---------------------------
-if st.session_state.exceeded_limits:
-    st.warning("⚠️ You've exceeded Free plan limits!")
+if st.session_state.exceeded_limits and not st.session_state.premium_authenticated:
     st.subheader("💎 Upgrade to Premium")
     st.info(f"Unlimited files, max {PREMIUM_MAX_MB}MB each")
+    
+    premium_key = st.text_input("Enter Premium Key to access Premium features", type="password")
+    if st.button("Authenticate Premium"):
+        if premium_key == PREMIUM_PASSWORD:
+            st.session_state.premium_authenticated = True
+            st.success("✅ Premium Access Granted!")
+        else:
+            st.error("❌ Invalid Premium Key")
 
+# ---------------------------
+# PREMIUM UPLOADER (After Authentication)
+# ---------------------------
+if st.session_state.premium_authenticated:
+    st.subheader("💎 Premium File Renamer")
     premium_uploaded_files = st.file_uploader(
         f"Upload files (Max {PREMIUM_MAX_MB}MB each)",
         accept_multiple_files=True,
