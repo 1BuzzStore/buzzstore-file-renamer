@@ -19,13 +19,16 @@ if not st.session_state.logged_in:
     plan_option = st.radio("Plan", ["Free", "Premium"])
 
     if st.button("Login"):
-        # Here you can add real authentication
+        # Simple authentication placeholder
         if username and password:
             st.session_state.logged_in = True
             st.session_state.plan = plan_option.lower()  # "free" or "premium"
             st.success(f"Logged in as {username} ({plan_option} Plan)")
-            st.experimental_set_query_params()  # reset query params
-            st.stop()  # stop execution to reload page
+            
+            # Reset query params using new API
+            st.query_params = {}
+            
+            st.stop()  # Stop execution to reload page
         else:
             st.error("Please enter username and password")
 
@@ -49,5 +52,7 @@ if st.session_state.logged_in:
     if st.button("Logout"):
         st.session_state.logged_in = False
         st.session_state.plan = "free"
-        st.experimental_set_query_params()
-        st.stop()  # reload page
+        
+        # Reset query params on logout
+        st.query_params = {}
+        st.stop()  # Reload page
