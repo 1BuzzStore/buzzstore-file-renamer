@@ -3,42 +3,28 @@ import os
 import io
 import zipfile
 
-# ---------------------------
-# File Renamer (Premium Feature)
-# ---------------------------
+PREMIUM_MAX_MB = 200
+
 st.title("💎 Premium File Renamer")
-
-# Show plan limits clearly
-st.success("💎 Premium Plan: Unlimited files, max **200MB each**")
-
-max_files = None
-max_size_mb = 200
+st.success(f"💎 Premium Plan: Unlimited files, max **{PREMIUM_MAX_MB}MB each**")
 
 uploaded_files = st.file_uploader(
-    f"Upload files to rename (Max {max_size_mb}MB each)",
+    f"Upload files to rename (Max {PREMIUM_MAX_MB}MB each)",
     accept_multiple_files=True
 )
 prefix = st.text_input("Enter prefix for renamed files", value="buzzstore")
 
 if st.button("Rename Files"):
     if uploaded_files:
-        # Validate file sizes
-        oversized_files = [
-            f.name for f in uploaded_files if (len(f.getbuffer()) / (1024 * 1024)) > max_size_mb
-        ]
-        if oversized_files:
-            st.error(
-                f"❌ The following files exceed the {max_size_mb}MB limit: {', '.join(oversized_files)}"
-            )
+        oversized = [f.name for f in uploaded_files if (len(f.getbuffer()) / (1024*1024)) > PREMIUM_MAX_MB]
+        if oversized:
+            st.error(f"❌ Files exceed {PREMIUM_MAX_MB}MB: {', '.join(oversized)}")
         else:
-            # Create an in-memory zip file
             zip_buffer = io.BytesIO()
             with zipfile.ZipFile(zip_buffer, "w") as zip_file:
-                for i, uploaded_file in enumerate(uploaded_files, start=1):
-                    file_extension = os.path.splitext(uploaded_file.name)[1]
-                    new_name = f"{prefix}_{i}{file_extension}"
-                    zip_file.writestr(new_name, uploaded_file.getbuffer())
-
+                for i, f in enumerate(uploaded_files, start=1):
+                    ext = os.path.splitext(f.name)[1]
+                    zip_file.writestr(f"{prefix}_{i}{ext}", f.getbuffer())
             zip_buffer.seek(0)
             st.success("✅ Files renamed successfully!")
             st.download_button(
@@ -47,5 +33,7 @@ if st.button("Rename Files"):
                 file_name="renamed_files.zip",
                 mime="application/zip"
             )
-    else:
-        st.warning("⚠️ Please upload at least one file.")
+
+if st.button("Switch to Free"):
+    st.session_state.plan = "free"
+    st.experimental_rerun()
