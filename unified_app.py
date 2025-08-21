@@ -2,6 +2,8 @@ import streamlit as st
 import os
 import io
 import zipfile
+import uuid
+import hashlib
 
 # ---------------------------
 # Constants
@@ -14,11 +16,18 @@ PREMIUM_MAX_MB = 200
 # Session State Defaults
 # ---------------------------
 if "view" not in st.session_state:
-    st.session_state.view = "free"  # free or premium
+    st.session_state.view = "free"  # free, premium_login, premium
+if "premium_logged_in" not in st.session_state:
+    st.session_state.premium_logged_in = False
+if "users" not in st.session_state:
+    st.session_state.users = {}  # email -> hashed password & token
 
 # ---------------------------
-# Helper Function
+# Helper Functions
 # ---------------------------
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
 def rename_files(files, prefix, max_size_mb):
     oversized_files = [
         f.name for f in files if (len(f.getbuffer()) / (1024 * 1024)) > max_size_mb
@@ -75,28 +84,76 @@ if st.session_state.view == "free":
     if exceeded:
         st.warning("⚠️ You've exceeded Free plan limits!")
         if st.button("Apply for Premium 💎"):
-            st.session_state.view = "premium"
-            st.stop()  # switch view immediately
+            st.session_state.view = "premium_login"
+            st.stop()
 
 # ---------------------------
-# PREMIUM VIEW
+# PREMIUM LOGIN / REGISTER VIEW
 # ---------------------------
-elif st.session_state.view == "premium":
-    st.title("💎 Premium File Renamer")
-    st.success(f"Upload unlimited files, max {PREMIUM_MAX_MB}MB each")
+elif st.session_state.view == "premium_login":
+    st.title("💎 Premium Login / Register")
 
-    uploaded_files = st.file_uploader(
-        f"Upload files (Max {PREMIUM_MAX_MB}MB each)",
-        accept_multiple_files=True
-    )
-    prefix = st.text_input("Enter prefix for renamed files", value="buzzstore_premium")
+    tab = st.radio("Choose option", ["Login", "Register"])
 
-    if st.button("Rename Files (Premium)"):
-        if uploaded_files:
-            rename_files(uploaded_files, prefix, PREMIUM_MAX_MB)
-        else:
-            st.warning("⚠️ Please upload at least one file.")
+    email = st.text_input("Email")
+    password = st.text_input("Password", type="password")
+
+    if tab == "Register":
+        if st.button("Register"):
+            if email in st.session_state.users:
+                st.error("Email already registered!")
+            elif not email or not password:
+                st.error("Email and password required!")
+            else:
+                token = str(uuid.uuid4())
+                st.session_state.users[email] = {"password": hash_password(password), "token": token}
+                st.success(f"Registered! Your access token: {token}")
+                st.session_state.premium_logged_in = True
+                st.session_state.view = "premium"
+                st.stop()
+
+    else:  # Login
+        if st.button("Login"):
+            user = st.session_state.users.get(email)
+            if not user:
+                st.error("Email not found!")
+            elif user["password"] != hash_password(password):
+                st.error("Incorrect password!")
+            else:
+                st.success("✅ Logged in successfully!")
+                st.session_state.premium_logged_in = True
+                st.session_state.view = "premium"
+                st.stop()
 
     if st.button("⬅️ Back to Free"):
         st.session_state.view = "free"
-        st.stop()  # immediately switch back
+        st.stop()
+
+# ---------------------------
+# PREMIUM FILE RENAMER VIEW
+# ---------------------------
+elif st.session_state.view == "premium":
+    if not st.session_state.premium_logged_in:
+        st.warning("You must login/register to access Premium features.")
+        if st.button("Go to Login"):
+            st.session_state.view = "premium_login"
+            st.stop()
+    else:
+        st.title("💎 Premium File Renamer")
+        st.success(f"Upload unlimited files, max {PREMIUM_MAX_MB}MB each")
+
+        uploaded_files = st.file_uploader(
+            f"Upload files (Max {PREMIUM_MAX_MB}MB each)",
+            accept_multiple_files=True
+        )
+        prefix = st.text_input("Enter prefix for renamed files", value="buzzstore_premium")
+
+        if st.button("Rename Files (Premium)"):
+            if uploaded_files:
+                rename_files(uploaded_files, prefix, PREMIUM_MAX_MB)
+            else:
+                st.warning("⚠️ Please upload at least one file.")
+
+        if st.button("⬅️ Back to Free"):
+            st.session_state.view = "free"
+            st.stop()
