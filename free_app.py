@@ -4,36 +4,52 @@ import io
 import zipfile
 
 # ---------------------------
-# Free File Renamer
+# File Renamer (Free Feature)
 # ---------------------------
 st.title("🆓 Free File Renamer")
 
-# Free plan limits
-MAX_FILES = 5
-MAX_SIZE_MB = 50
-st.info(f"📦 Free Plan: Upload up to **{MAX_FILES} files**, max **{MAX_SIZE_MB}MB each**")
+# Show plan limits clearly
+st.info("📦 Free Plan: Upload up to **5 files**, max **50MB each**")
+
+max_files = 5
+max_size_mb = 50
 
 uploaded_files = st.file_uploader(
-    f"Upload files (Max {MAX_FILES} files, {MAX_SIZE_MB}MB each)",
+    f"Upload files to rename (Max {max_files} files, {max_size_mb}MB each)",
     accept_multiple_files=True
 )
 prefix = st.text_input("Enter prefix for renamed files", value="buzzstore")
 
 if st.button("Rename Files"):
-    if not uploaded_files:
-        st.warning("⚠️ Please upload at least one file.")
-    elif len(uploaded_files) > MAX_FILES:
-        st.error(f"❌ Free users can only upload up to {MAX_FILES} files.")
-    else:
-        oversized = [f.name for f in uploaded_files if len(f.getbuffer()) / (1024 * 1024) > MAX_SIZE_MB]
-        if oversized:
-            st.error(f"❌ These files exceed {MAX_SIZE_MB}MB: {', '.join(oversized)}")
+    if uploaded_files:
+        # Check number of files
+        if len(uploaded_files) > max_files:
+            st.error(f"❌ Free users can only upload up to {max_files} files.")
         else:
-            zip_buffer = io.BytesIO()
-            with zipfile.ZipFile(zip_buffer, "w") as zip_file:
-                for i, f in enumerate(uploaded_files, start=1):
-                    ext = os.path.splitext(f.name)[1]
-                    zip_file.writestr(f"{prefix}_{i}{ext}", f.getbuffer())
-            zip_buffer.seek(0)
-            st.success("✅ Files renamed successfully!")
-            st.download_button("⬇️ Download Renamed Files (ZIP)", zip_buffer, "renamed_files.zip", "application/zip")
+            # Validate file sizes
+            oversized_files = [
+                f.name for f in uploaded_files if (len(f.getbuffer()) / (1024 * 1024)) > max_size_mb
+            ]
+            if oversized_files:
+                st.error(
+                    f"❌ The following files exceed the {max_size_mb}MB limit: {', '.join(oversized_files)}"
+                )
+            else:
+                # Create an in-memory zip file
+                zip_buffer = io.BytesIO()
+                with zipfile.ZipFile(zip_buffer, "w") as zip_file:
+                    for i, uploaded_file in enumerate(uploaded_files, start=1):
+                        file_extension = os.path.splitext(uploaded_file.name)[1]
+                        new_name = f"{prefix}_{i}{file_extension}"
+                        zip_file.writestr(new_name, uploaded_file.getbuffer())
+
+                zip_buffer.seek(0)
+                st.success("✅ Files renamed successfully!")
+                st.download_button(
+                    label="⬇️ Download Renamed Files (ZIP)",
+                    data=zip_buffer,
+                    file_name="renamed_files.zip",
+                    mime="application/zip"
+                )
+    else:
+        st.warning("⚠️ Please upload at least one file.")
