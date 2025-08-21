@@ -4,39 +4,36 @@ import io
 import zipfile
 
 # ---------------------------
-# PLAN CONFIG
+# Constants
 # ---------------------------
 FREE_MAX_FILES = 5
 FREE_MAX_MB = 50
 PREMIUM_MAX_MB = 200
-PREMIUM_PASSWORD = "buzzpremium"  # change to your desired premium key
 
 # ---------------------------
-# SESSION STATE
+# Session State Defaults
 # ---------------------------
 if "view" not in st.session_state:
-    st.session_state.view = "free"
-if "premium_authenticated" not in st.session_state:
-    st.session_state.premium_authenticated = False
+    st.session_state.view = "free"  # free or premium
 if "exceeded_limits" not in st.session_state:
     st.session_state.exceeded_limits = False
 
 # ---------------------------
-# HELPER FUNCTION
+# Helper Function
 # ---------------------------
-def rename_files(uploaded_files, prefix, max_mb):
+def rename_files(files, prefix, max_size_mb):
     oversized_files = [
-        f.name for f in uploaded_files if (len(f.getbuffer()) / (1024 * 1024)) > max_mb
+        f.name for f in files if (len(f.getbuffer()) / (1024 * 1024)) > max_size_mb
     ]
     if oversized_files:
-        st.error(f"❌ The following files exceed {max_mb}MB: {', '.join(oversized_files)}")
-        return False
+        st.error(f"❌ The following files exceed {max_size_mb}MB: {', '.join(oversized_files)}")
+        return
 
     zip_buffer = io.BytesIO()
     with zipfile.ZipFile(zip_buffer, "w") as zip_file:
-        for i, uploaded_file in enumerate(uploaded_files, start=1):
-            file_extension = os.path.splitext(uploaded_file.name)[1]
-            new_name = f"{prefix}_{i}{file_extension}"
+        for i, uploaded_file in enumerate(files, start=1):
+            ext = os.path.splitext(uploaded_file.name)[1]
+            new_name = f"{prefix}_{i}{ext}"
             zip_file.writestr(new_name, uploaded_file.getbuffer())
     zip_buffer.seek(0)
     st.success("✅ Files renamed successfully!")
@@ -46,7 +43,6 @@ def rename_files(uploaded_files, prefix, max_mb):
         file_name="renamed_files.zip",
         mime="application/zip"
     )
-    return True
 
 # ---------------------------
 # FREE VIEW
@@ -67,59 +63,40 @@ if st.session_state.view == "free":
                 (len(f.getbuffer()) / (1024 * 1024)) > FREE_MAX_MB for f in uploaded_files
             ):
                 st.session_state.exceeded_limits = True
-                st.experimental_rerun()  # <-- removed in new version
+                st.stop()  # immediately re-render
             else:
                 rename_files(uploaded_files, prefix, FREE_MAX_MB)
+        else:
+            st.warning("⚠️ Please upload at least one file.")
 
+    # Show Premium button only if limits exceeded
     if st.session_state.exceeded_limits:
         st.warning("⚠️ You've exceeded Free plan limits!")
-        # Single-click button effect
         if st.button("Apply for Premium 💎"):
-            st.session_state.view = "premium_login"
-            st.session_state.exceeded_limits = False  # reset
-            st.stop()  # immediately refresh layout
-
-# ---------------------------
-# PREMIUM LOGIN VIEW
-# ---------------------------
-elif st.session_state.view == "premium_login":
-    st.title("💎 Premium Access Required")
-    st.info(f"Unlimited files, max {PREMIUM_MAX_MB}MB each")
-
-    premium_key = st.text_input("Enter Premium Key", type="password")
-    if st.button("Authenticate Premium"):
-        if premium_key == PREMIUM_PASSWORD:
-            st.session_state.premium_authenticated = True
             st.session_state.view = "premium"
-        else:
-            st.error("❌ Invalid Premium Key")
-
-    if st.button("← Back to Free"):
-        st.session_state.view = "free"
-        st.session_state.exceeded_limits = False
-        st.stop()
+            st.session_state.exceeded_limits = False
+            st.stop()  # immediately switch view
 
 # ---------------------------
 # PREMIUM VIEW
 # ---------------------------
-elif st.session_state.view == "premium" and st.session_state.premium_authenticated:
+elif st.session_state.view == "premium":
     st.title("💎 Premium File Renamer")
-    st.success(f"Unlimited files, max {PREMIUM_MAX_MB}MB each")
+    st.success(f"Upload unlimited files, max {PREMIUM_MAX_MB}MB each")
 
-    premium_uploaded_files = st.file_uploader(
+    uploaded_files = st.file_uploader(
         f"Upload files (Max {PREMIUM_MAX_MB}MB each)",
-        accept_multiple_files=True,
-        key="premium_uploader"
+        accept_multiple_files=True
     )
-    premium_prefix = st.text_input("Enter prefix for renamed files (Premium)", value="buzzstore_premium")
+    prefix = st.text_input("Enter prefix for renamed files", value="buzzstore_premium")
 
     if st.button("Rename Files (Premium)"):
-        if premium_uploaded_files:
-            rename_files(premium_uploaded_files, premium_prefix, PREMIUM_MAX_MB)
+        if uploaded_files:
+            rename_files(uploaded_files, prefix, PREMIUM_MAX_MB)
         else:
             st.warning("⚠️ Please upload at least one file.")
 
-    if st.button("← Back to Free"):
+    # Back to Free button
+    if st.button("⬅️ Back to Free"):
         st.session_state.view = "free"
-        st.session_state.exceeded_limits = False
-        st.stop()
+        st.stop()  # immediately switch back
