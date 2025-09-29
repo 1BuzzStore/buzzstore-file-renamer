@@ -1,4 +1,4 @@
-# 📂 BuzzStore File Renamer
+# 📂 BZ File Renamer
 
 ![BuzzStore Logo](buzzstore_logo.png)
 
