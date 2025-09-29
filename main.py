@@ -13,7 +13,7 @@ import re
 import base64
 
 # ✅ Page config
-st.set_page_config(page_title="BuzzStore File Renamer", page_icon="📂", layout="centered")
+st.set_page_config(page_title="BZ File Renamer", page_icon="📂", layout="centered")
 
 # ✅ Load logo safely
 def load_logo_b64(path="buzzstore_logo.png"):
